@@ -186,16 +186,18 @@ class AWSCluster(ClusterManager):
         # Update the cluster_info with AWS stack information.
         # This makes node IP addresses available to ``cluster_info``.
         # cluster.masters/agents/public_agents rely on this information.
-
-        # OnpremLauncher, DcosCloudformationLauncher
-        self.launcher = get_launcher(self.cluster_info)  # type: ignore
-
         self.cluster_info = self.launcher.describe()
 
         # Store the generated AWS SSH key to the file system.
         self._ssh_key_path = self._path / 'id_rsa'
         private_key = self.cluster_info['ssh_private_key']
         Path(self._ssh_key_path).write_bytes(private_key.encode())
+
+        # OnpremLauncher, DcosCloudformationLauncher
+        self.launcher = get_launcher(self.cluster_info)  # type: ignore
+
+        self.cluster_info = self.launcher.describe()
+
 
     def install_dcos_from_url(
         self,
