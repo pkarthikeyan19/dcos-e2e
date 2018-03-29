@@ -189,13 +189,10 @@ class AWSCluster(ClusterManager):
         # Update the cluster_info with AWS stack information.
         # This makes node IP addresses available to ``cluster_info``.
         # cluster.masters/agents/public_agents rely on this information.
-        self.cluster_info = self.launcher.describe()
-
         # OnpremLauncher, DcosCloudformationLauncher
-        self.launcher = get_launcher(self.cluster_info)  # type: ignore
+        self.launcher = get_launcher(self.cluster.config)  # type: ignore
 
         self.cluster_info = self.launcher.describe()
-
 
     def install_dcos_from_url(
         self,
