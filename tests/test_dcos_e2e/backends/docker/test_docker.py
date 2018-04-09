@@ -5,6 +5,7 @@ This module contains tests for Docker backend features which are not covered by
 sibling modules.
 """
 
+import subprocess
 import uuid
 from pathlib import Path
 from typing import Dict
@@ -15,12 +16,26 @@ import docker
 import pytest
 from py.path import local  # pylint: disable=no-name-in-module, import-error
 from requests_mock import Mocker, NoMockAddress
+from retry import retry
 
 from dcos_e2e.backends import Docker
 from dcos_e2e.cluster import Cluster
 from dcos_e2e.docker_storage_drivers import DockerStorageDriver
 from dcos_e2e.docker_versions import DockerVersion
 from dcos_e2e.node import Node
+
+
+@retry(
+    exceptions=(subprocess.CalledProcessError),
+    tries=60,
+    delay=1,
+)
+def _wait_for_docker(node: Node) -> None:
+    """
+    Retry for up to one minute (arbitrary) until Docker is running on the given
+    node.
+    """
+    node.run(args=['docker', 'info'])
 
 
 class TestDockerBackend:
@@ -127,6 +142,7 @@ class TestDockerVersion:
         """
         Given a `Node`, return the `DockerVersion` on that node.
         """
+        _wait_for_docker(node=node)
         args = ['docker', 'version', '--format', '{{.Server.Version}}']
         result = node.run(args)
         docker_versions = {
@@ -208,6 +224,7 @@ class TestDockerStorageDriver:
         """
         Given a `Node`, return the `DockerStorageDriver` on that node.
         """
+        _wait_for_docker(node=node)
         result = node.run(args=['docker', 'info', '--format', '{{.Driver}}'])
 
         return self.DOCKER_STORAGE_DRIVERS[result.stdout.decode().strip()]
@@ -293,40 +310,54 @@ class TestLabels:
         ]
         return dict(container.labels)
 
-    def test_default(self) -> None:
-        """
-        The node type is stored in a label.
-        """
-        with Cluster(
-            cluster_backend=Docker(),
-            masters=1,
-            agents=1,
-            public_agents=1,
-        ) as cluster:
-            (master, ) = cluster.masters
-            (agent, ) = cluster.agents
-            (public_agent, ) = cluster.public_agents
-            assert self._get_labels(master)['node_type'] == 'master'
-            assert self._get_labels(agent)['node_type'] == 'agent'
-            assert (
-                self._get_labels(public_agent)['node_type'] == 'public_agent'
-            )
-
     def test_custom(self) -> None:
         """
         It is possible to set node Docker container labels.
         """
-        key = uuid.uuid4().hex
-        value = uuid.uuid4().hex
-        labels = {key: value}
+        cluster_key = uuid.uuid4().hex
+        cluster_value = uuid.uuid4().hex
+        cluster_labels = {cluster_key: cluster_value}
+
+        master_key = uuid.uuid4().hex
+        master_value = uuid.uuid4().hex
+        master_labels = {master_key: master_value}
+
+        agent_key = uuid.uuid4().hex
+        agent_value = uuid.uuid4().hex
+        agent_labels = {agent_key: agent_value}
+
+        public_agent_key = uuid.uuid4().hex
+        public_agent_value = uuid.uuid4().hex
+        public_agent_labels = {public_agent_key: public_agent_value}
 
         with Cluster(
-            cluster_backend=Docker(docker_container_labels=labels),
+            cluster_backend=Docker(
+                docker_container_labels=cluster_labels,
+                docker_master_labels=master_labels,
+                docker_agent_labels=agent_labels,
+                docker_public_agent_labels=public_agent_labels,
+            ),
             masters=1,
             agents=1,
             public_agents=1,
         ) as cluster:
-            nodes = {*cluster.masters, *cluster.agents, *cluster.public_agents}
-            for node in nodes:
+            for node in cluster.masters:
                 node_labels = self._get_labels(node=node)
-                assert node_labels[key] == value
+                assert node_labels[cluster_key] == cluster_value
+                assert node_labels[master_key] == master_value
+                assert agent_key not in node_labels
+                assert public_agent_key not in node_labels
+
+            for node in cluster.agents:
+                node_labels = self._get_labels(node=node)
+                assert node_labels[cluster_key] == cluster_value
+                assert node_labels[agent_key] == agent_value
+                assert master_key not in node_labels
+                assert public_agent_key not in node_labels
+
+            for node in cluster.public_agents:
+                node_labels = self._get_labels(node=node)
+                assert node_labels[cluster_key] == cluster_value
+                assert node_labels[public_agent_key] == public_agent_value
+                assert master_key not in node_labels
+                assert agent_key not in node_labels

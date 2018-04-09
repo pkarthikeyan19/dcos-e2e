@@ -7,6 +7,21 @@ Next
 ----
 
 - Add an AWS backend to the library.
+- Add ability to control which labels are added to particular node types on the ``Docker`` backend.
+- Add support for Ubuntu on the ``Docker`` backend.
+
+2018.04.02.1
+------------
+
+- Add a new ``dcos-docker doctor`` check for suitable ``sed`` for DC/OS 1.9.
+- Support ``cluster.run_integration_tests`` on DC/OS 1.9.
+
+2018.04.02.0
+------------
+
+- Add support for DC/OS 1.9 on Linux hosts.
+- ``dcos-docker doctor`` returns a status code of ``1`` if there are any errors.
+- Add a new ``dcos-docker doctor`` check for free space in the Docker root directory.
 
 2018.03.26.0
 ------------

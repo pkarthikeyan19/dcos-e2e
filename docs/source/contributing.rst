@@ -161,7 +161,7 @@ To update these links use the following commands, after setting the following en
 Updating the Amazon Web Services credentials
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Private credentials for Amazon Web Services used by Travis CI.
+Private credentials for Amazon Web Services are used by Travis CI.
 
 To update the credentials use the following commands, after setting the following environment variables:
 
@@ -230,15 +230,13 @@ Updating DC/OS Test Utils and DC/OS Launch
 `DC/OS Test Utils <https://github.com/dcos/dcos-test-utils>`__ and `DC/OS Launch <https://github.com/dcos/dcos-launch>`__ are vendored in this repository.
 To update DC/OS Test Utils or DC/OS Launch:
 
-Update the SHAs in ``admin/update_launch.py``.
+Update the SHAs in ``admin/update_vendored_packages.py``.
+
+The following creates a commit with changes to the vendored packages:
 
 .. code:: sh
 
-    git rm -rf src/dcos_e2e/_vendor/
-    rm -rf src/dcos_e2e/_vendor
-    python admin/update_launch.py
-    git add src/dcos_e2e/_vendor
-    git commit -m "Update vendored packages"
+   admin/update_vendored_packages.sh
 
 Redirect DC/OS Launch package resources
 ---------------------------------------
@@ -249,7 +247,7 @@ In order discover its package resources after an update of the vendored DC/OS La
 * :file:`dcos_e2e/_vendor/dcos_launch/onprem.py`
 * :file:`dcos_e2e/_vendor/dcos_launch/platform/aws.py`
 
-The progress on automating this procedure is tracked in the JIRA issue `DCOS-21895 <https://jira.mesosphere.com/browse/DCOS-21895>`_.
+The progress on automating this procedure is tracked in :issue:`DCOS-21895`.
 
 Testing the Homebrew Recipe
 ----------------------------

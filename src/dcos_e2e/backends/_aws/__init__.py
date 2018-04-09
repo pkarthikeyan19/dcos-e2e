@@ -54,9 +54,28 @@ class AWS(ClusterBackend):
             workspace_dir: The directory in which large temporary files will be
                 created. These files will be deleted at the end of a test run.
 
+        Raises:
+            NotImplementedError: In case an unsupported Linux distribution has
+                been passed in at backend creation.
+
         .. _Regions and Availability Zones:
             https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html
         """
+        supported_distributions = set(
+            [
+                Distribution.CENTOS_7,
+                # Progress on COREOS support is tracked in JIRA:
+                # https://jira.mesosphere.com/browse/DCOS-21954
+            ],
+        )
+
+        if linux_distribution not in supported_distributions:
+            message = (
+                'The {} Linux distribution is currently not support by '
+                'the AWS backend.'
+            ).format(linux_distribution.name)
+            raise NotImplementedError(message)
+
         self.workspace_dir = workspace_dir or Path(gettempdir())
         self.linux_distribution = linux_distribution
         self.aws_region = aws_region
@@ -93,7 +112,7 @@ class AWSCluster(ClusterManager):
             agents: The number of agent nodes to create.
             public_agents: The number of public agent nodes to create.
             files_to_copy_to_installer: Pairs of host paths to paths on the
-                installer node. This must be empty for as it is not currently
+                installer node. This must be empty as it is not currently
                 supported.
             cluster_backend: Details of the specific AWS backend to use.
 
@@ -133,7 +152,15 @@ class AWSCluster(ClusterManager):
             Distribution.COREOS: 'coreos',
         }
 
+        # Workaround for 1.9 as it will not work with ip_detect_public_filename
+        # https://jira.mesosphere.com/browse/DCOS-21960
+        detect_ip_public = (
+            '#!/bin/bash\n'
+            'curl fsSL http://169.254.169.254/latest/meta-data/public-ipv4',
+        )
+
         launch_config = {
+            'ip_detect_public_contents': detect_ip_public,
             'admin_location': cluster_backend.admin_location,
             'aws_region': cluster_backend.aws_region,
             'deployment_name': unique,
@@ -155,18 +182,19 @@ class AWSCluster(ClusterManager):
         # dcos-launch config to pass the config validation step.
         launch_config['dcos_config'] = {
             'cluster_name': unique,
-            'resolvers': ['10.10.0.2', '8.8.8.8'],
+            'resolvers': ['8.8.4.4', '8.8.8.8'],
             'master_discovery': 'static',
+            'dns_search': 'mesos',
             'exhibitor_storage_backend': 'static',
         }
 
         # Validate the preliminary dcos-launch config.
+        # This also fills in blanks in the dcos-launch config.
         validated_launch_config = config.get_validated_config(
             user_config=launch_config,
             config_dir=str(self._path),
         )
 
-        # Also DcosCloudformationLauncher
         # Get a OnpremLauncher object
         self.launcher = get_launcher(  # type: ignore
             config=validated_launch_config,
@@ -184,11 +212,13 @@ class AWSCluster(ClusterManager):
         # Wait for the AWS stack setup completion.
         DcosCloudformationLauncher.wait(self.launcher)  # type: ignore
 
-        # Update the cluster_info with AWS stack information.
+        # Update the cluster_info with AWS stack information:
+        # ``describe`` fetches the latest information for the stack.
         # This makes node IP addresses available to ``cluster_info``.
-        # cluster.masters/agents/public_agents rely on this information.
-        # OnpremLauncher, DcosCloudformationLauncher
-        self.cluster_info = AbstractOnpremLauncher.describe(self.launcher)
+        # This also inserts bootstrap node information into ``cluster_info``.
+        self.cluster_info = AbstractOnpremLauncher.describe(  # type: ignore
+            self.launcher,
+        )
 
     def install_dcos_from_url(
         self,
@@ -206,13 +236,8 @@ class AWSCluster(ClusterManager):
                 variables that are applied on top of the default DC/OS
                 configuration of the AWS backend.
             log_output_live: If ``True``, log output of the installation live.
-
-        Raises:
-            KeyboardInterrupt: If a keyboard interrupt is triggered during the
-                installation of DC/OS.
-            Exception: If the DC/OS installation fails for any other reason.
-
         """
+
         # In order to install DC/OS with the preliminary dcos-launch
         # config the ``build_artifact`` URL is overwritten.
         self.launcher.config['installer_url'] = build_artifact
@@ -232,6 +257,7 @@ class AWSCluster(ClusterManager):
         except (KeyboardInterrupt, Exception):
             self.destroy()
             raise
+        AbstractOnpremLauncher.wait(self.launcher)  # type: ignore
 
     def install_dcos_from_path(
         self,

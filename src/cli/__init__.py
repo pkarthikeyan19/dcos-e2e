@@ -50,12 +50,15 @@ from ._common import (
     existing_cluster_ids,
 )
 from ._doctor_checks import (
-    check_free_space,
+    CheckLevels,
+    check_1_9_sed,
+    check_docker_root_free_space,
     check_memory,
     check_mount_tmp,
     check_networking,
     check_ssh,
     check_storage_driver,
+    check_tmp_free_space,
     link_to_troubleshooting,
 )
 from ._utils import is_enterprise
@@ -365,9 +368,12 @@ def create(
             build_artifact=artifact_path,
             workspace_dir=workspace_dir,
         )
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as exc:
         rmtree(path=str(workspace_dir), ignore_errors=True)
         click.echo(doctor_message)
+        click.echo()
+        click.echo('Original error:')
+        click.echo(exc.stderr)
         raise
 
     if enterprise:
@@ -407,6 +413,9 @@ def create(
             WORKSPACE_DIR_LABEL_KEY: str(workspace_dir),
             VARIANT_LABEL_KEY: 'ee' if enterprise else '',
         },
+        docker_master_labels={'node_type': 'master'},
+        docker_agent_labels={'node_type': 'agent'},
+        docker_public_agent_labels={'node_type': 'public_agent'},
         workspace_dir=workspace_dir,
     )
 
@@ -937,10 +946,19 @@ def doctor() -> None:
     """
     Diagnose common issues which stop DC/OS E2E from working correctly.
     """
-    check_free_space()
-    check_storage_driver()
-    check_ssh()
-    check_networking()
-    check_mount_tmp()
-    check_memory()
+    check_functions = [
+        check_1_9_sed,
+        check_docker_root_free_space,
+        check_memory,
+        check_mount_tmp,
+        check_networking,
+        check_ssh,
+        check_storage_driver,
+        check_tmp_free_space,
+    ]
+
+    highest_level = max(function() for function in check_functions)
+
     link_to_troubleshooting()
+    if highest_level == CheckLevels.ERROR:
+        sys.exit(1)

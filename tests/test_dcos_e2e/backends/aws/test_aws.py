@@ -13,10 +13,48 @@ from dcos_e2e.cluster import Cluster
 from dcos_e2e.distributions import Distribution
 
 
+class TestDefaults:
+    """
+    Tests for default values of the AWS backend.
+    """
+
+    def test_admin_location(self) -> None:
+        """
+        The default ``admin_location`` is correct.
+        """
+        assert AWS().admin_location == '0.0.0.0/0'
+
+    def test_aws_region(self) -> None:
+        """
+        The default ``aws_region`` is correct.
+        """
+        assert AWS().aws_region == 'us-west-2'
+
+    def test_linux_distribution(self) -> None:
+        """
+        The default ``linux_distribution`` is correct.
+        """
+        assert AWS().linux_distribution == Distribution.CENTOS_7
+
+
 class TestUnsupported:
     """
     Tests for unsupported functionality specific to the AWS backend.
     """
+
+    def test_linux_distribution_coreos(self) -> None:
+        """
+        The AWS backend does not support the COREOS Linux distribution.
+        """
+        with pytest.raises(NotImplementedError) as excinfo:
+            AWS(linux_distribution=Distribution.COREOS)
+
+        expected_error = (
+            'The COREOS Linux distribution is currently not support by '
+            'the AWS backend.'
+        )
+
+        assert str(excinfo.value) == expected_error
 
     def test_copy_to_installer_not_supported(self) -> None:
         """
@@ -63,7 +101,7 @@ class TestRunIntegrationTest:
     Tests for functionality specific to the AWS backend.
     """
 
-    @pytest.mark.parametrize('linux_distribution', list(Distribution))
+    @pytest.mark.parametrize('linux_distribution', [Distribution.CENTOS_7])
     def test_run_enterprise_integration_test(
         self,
         ee_artifact_url: str,
@@ -72,6 +110,7 @@ class TestRunIntegrationTest:
     ) -> None:
         """
         It is possible to run DC/OS integration tests on AWS.
+        This test module only requires a single master node.
         """
         superuser_username = str(uuid.uuid4())
         superuser_password = str(uuid.uuid4())
@@ -88,15 +127,6 @@ class TestRunIntegrationTest:
             masters=1,
         ) as cluster:
 
-            (master, ) = cluster.masters
-
-            result = master.run(
-                args=['echo', 'test'],
-                shell=True,
-            )
-
-            assert result.stdout.decode() == 'test\n'
-
             cluster.install_dcos_from_url(
                 build_artifact=ee_artifact_url,
                 extra_config=config,
@@ -108,16 +138,12 @@ class TestRunIntegrationTest:
                 superuser_password=superuser_password,
             )
 
-            master_ip = next(iter(cluster.masters)).private_ip_address
-
             # No error is raised with a successful command.
             cluster.run_integration_tests(
                 pytest_command=['pytest', '-vvv', '-s', '-x', 'test_tls.py'],
                 env={
                     'DCOS_LOGIN_UNAME': superuser_username,
                     'DCOS_LOGIN_PW': superuser_password,
-                    'DCOS_SSL_ENABLED': 'true',
-                    'DCOS_DNS_ADDRESS': 'https://' + str(master_ip),
                 },
                 log_output_live=True,
             )
