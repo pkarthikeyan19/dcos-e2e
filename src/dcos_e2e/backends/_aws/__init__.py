@@ -160,7 +160,6 @@ class AWSCluster(ClusterManager):
         )
 
         launch_config = {
-            'ip_detect_public_contents': detect_ip_public,
             'admin_location': cluster_backend.admin_location,
             'aws_region': cluster_backend.aws_region,
             'deployment_name': unique,
@@ -186,6 +185,7 @@ class AWSCluster(ClusterManager):
             'master_discovery': 'static',
             'dns_search': 'mesos',
             'exhibitor_storage_backend': 'static',
+            'ip_detect_public_contents': detect_ip_public,
         }
 
         # Validate the preliminary dcos-launch config.
