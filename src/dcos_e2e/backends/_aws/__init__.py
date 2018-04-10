@@ -156,7 +156,7 @@ class AWSCluster(ClusterManager):
         # https://jira.mesosphere.com/browse/DCOS-21960
         detect_ip_public = (
             '#!/bin/bash\n'
-            'curl fsSL http://169.254.169.254/latest/meta-data/public-ipv4',
+            'curl -fsSL http://169.254.169.254/latest/meta-data/public-ipv4',
         )
 
         launch_config = {
