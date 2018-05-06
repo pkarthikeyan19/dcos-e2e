@@ -291,7 +291,6 @@ class DockerCluster(ClusterManager):
         bootstrap_genconf_path.mkdir()
         self._bootstrap_tmp_path = Path('/opt/dcos_install_tmp')
 
-
         docker_image_tag = 'mesosphere/dcos-docker'
         build_docker_image(
             tag=docker_image_tag,
