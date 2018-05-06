@@ -291,18 +291,32 @@ class DockerCluster(ClusterManager):
         bootstrap_genconf_path.mkdir()
         self._bootstrap_tmp_path = Path('/opt/dcos_install_tmp')
 
-        # See https://success.docker.com/KBase/Different_Types_of_Volumes
-        # for a definition of different types of volumes.
-        node_tmpfs_mounts = {
-            '/run': 'rw,exec,nosuid,size=2097152k',
-            '/tmp': 'rw,exec,nosuid,size=2097152k',
-        }
 
         docker_image_tag = 'mesosphere/dcos-docker'
         build_docker_image(
             tag=docker_image_tag,
             linux_distribution=cluster_backend.linux_distribution,
             docker_version=cluster_backend.docker_version,
+        )
+
+        # See https://success.docker.com/KBase/Different_Types_of_Volumes
+        # for a definition of different types of volumes.
+        run_mount = Mount(
+            source=None,
+            destination='/run',
+            type='tmpfs',
+            read_only=False,
+            tmpfs_size='2097152k',
+            tmpfs_mode='exec,nosuid',
+        )
+
+        tmp_mount = Mount(
+            source=None,
+            destination='/run',
+            type='tmpfs',
+            read_only=False,
+            tmpfs_size='2097152k',
+            tmpfs_mode='exec,nosuid',
         )
 
         certs_mount = Mount(
@@ -342,6 +356,7 @@ class DockerCluster(ClusterManager):
         )
 
         agent_mounts = [
+            run_mount,
             certs_mount,
             bootstrap_genconf_mount,
             cgroup_mount,
@@ -359,6 +374,7 @@ class DockerCluster(ClusterManager):
         )
 
         master_mounts = [
+            tmp_mount,
             certs_mount,
             bootstrap_genconf_mount,
             var_lib_docker_mount,
@@ -375,7 +391,6 @@ class DockerCluster(ClusterManager):
                 dcos_num_masters=masters,
                 dcos_num_agents=agents + public_agents,
                 mounts=master_mounts,
-                tmpfs=node_tmpfs_mounts,
                 docker_image=docker_image_tag,
                 labels={
                     **cluster_backend.docker_container_labels,
@@ -394,7 +409,6 @@ class DockerCluster(ClusterManager):
                 dcos_num_masters=masters,
                 dcos_num_agents=agents + public_agents,
                 mounts=private_agent_mounts,
-                tmpfs=node_tmpfs_mounts,
                 docker_image=docker_image_tag,
                 labels={
                     **cluster_backend.docker_container_labels,
@@ -413,7 +427,6 @@ class DockerCluster(ClusterManager):
                 dcos_num_masters=masters,
                 dcos_num_agents=agents + public_agents,
                 mounts=public_agent_mounts,
-                tmpfs=node_tmpfs_mounts,
                 docker_image=docker_image_tag,
                 labels={
                     **cluster_backend.docker_container_labels,
