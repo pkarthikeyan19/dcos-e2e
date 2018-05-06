@@ -302,7 +302,7 @@ class DockerCluster(ClusterManager):
         # for a definition of different types of volumes.
         run_mount = Mount(
             source=None,
-            destination='/run',
+            target='/run',
             type='tmpfs',
             read_only=False,
             tmpfs_size='2097152k',
@@ -311,7 +311,7 @@ class DockerCluster(ClusterManager):
 
         tmp_mount = Mount(
             source=None,
-            destination='/run',
+            target='/run',
             type='tmpfs',
             read_only=False,
             tmpfs_size='2097152k',
