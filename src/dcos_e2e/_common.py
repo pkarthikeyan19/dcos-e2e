@@ -3,12 +3,14 @@ Common utilities for end to end tests.
 """
 
 import logging
+from pprint import pformat
 import subprocess
 from subprocess import PIPE, STDOUT, CompletedProcess, Popen
 from typing import Dict, List, Optional, Union
 
 logging.basicConfig(level=logging.DEBUG)
-LOGGER = logging.getLogger(__name__)
+CMD = logging.getLogger('dcos_e2e.cmd')
+OUT = logging.getLogger('dcos_e2e.out')
 
 
 def run_subprocess(
@@ -57,6 +59,9 @@ def run_subprocess(
     else:
         process_stderr = PIPE
 
+    for line in pformat(args, width=160, compact=True).split('\n'):
+        CMD.info(line)
+
     with Popen(
         args=args,
         cwd=cwd,
@@ -69,37 +74,37 @@ def run_subprocess(
                 stdout = b''
                 stderr = b''
                 for line in process.stdout:
-                    LOGGER.debug(
+                    OUT.debug(
                         line.rstrip().decode('ascii', 'backslashreplace')
                     )
                     stdout += line
                 # stderr/stdout are not readable anymore which usually means
-                # that the child process has exited. However, the child
-                # process has not been wait()ed for yet, i.e. it has not yet
-                # been reaped. That is, its exit status is unknown. Read its
-                # exit status.
-                process.wait()
+                # that the child process has exited.
             else:
                 stdout, stderr = process.communicate()
         except Exception:  # pragma: no cover
-            # We clean up if there is an error while getting the output.
+            # Ensure the subprocess(es) are terminated.
             # This may not happen while running tests so we ignore coverage.
-            process.kill()
-            process.wait()
+            process.terminate()
+            try:
+                process.wait(1)
+            except subprocess.TimeoutExpired:
+                process.kill()
             raise
-        if stderr:
-            if process.returncode == 0:
-                log = LOGGER.warning
-                log(repr(args))
-            else:
-                log = LOGGER.error
-            for line in stderr.rstrip().split(b'\n'):
-                log(line.rstrip().decode('ascii', 'backslashreplace'))
-        if process.returncode != 0:
-            raise subprocess.CalledProcessError(
-                process.returncode,
-                args,
-                output=stdout,
-                stderr=stderr,
-            )
+    # Exiting context manager wait()s for the process and sets the return code.
+    if stderr:
+        if process.returncode == 0:
+            level = logging.WARNING
+        else:
+            level = logging.ERROR
+        for line in stderr.rstrip().split(b'\n'):
+            OUT.log(level, line.rstrip().decode('ascii', 'backslashreplace'))
+    if process.returncode != 0:
+        CMD.error('Exit status: %s', process.returncode)
+        raise subprocess.CalledProcessError(
+            process.returncode,
+            args,
+            output=stdout,
+            stderr=stderr,
+        )
     return CompletedProcess(args, process.returncode, stdout, stderr)
