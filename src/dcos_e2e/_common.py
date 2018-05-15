@@ -13,6 +13,19 @@ CMD = logging.getLogger('dcos_e2e.cmd')
 OUT = logging.getLogger('dcos_e2e.out')
 
 
+def safe_decode(b):
+    """
+    Decode a bytestring to Unicode with a safe fallback
+    """
+    try:
+        # Try UTF-8 first
+        return b.decode('utf8')
+    except UnicodeDecodeError:
+        # Fallback to a decoding which should always work. For the many
+        # encodings that are a superset of ASCII, it may even be legible.
+        return b.decode('ascii', 'backslashreplace')
+
+
 def run_subprocess(
     args: List[str],
     log_output_live: bool,
@@ -74,9 +87,7 @@ def run_subprocess(
                 stdout = b''
                 stderr = b''
                 for line in process.stdout:
-                    OUT.debug(
-                        line.rstrip().decode('ascii', 'backslashreplace')
-                    )
+                    OUT.debug(safe_decode(line.rstrip()))
                     stdout += line
                 # stderr/stdout are not readable anymore which usually means
                 # that the child process has exited.
@@ -98,7 +109,7 @@ def run_subprocess(
         else:
             level = logging.ERROR
         for line in stderr.rstrip().split(b'\n'):
-            OUT.log(level, line.rstrip().decode('ascii', 'backslashreplace'))
+            OUT.log(level, safe_decode(line))
     if process.returncode != 0:
         CMD.error('Exit status: %s', process.returncode)
         raise subprocess.CalledProcessError(
